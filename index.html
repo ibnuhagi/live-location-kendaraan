@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Location Kendaraan</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+    #map {
+      height: 80vh;
+    }
+    .info {
+      padding: 10px;
+      background: #f4f4f4;
+    }
+  </style>
+</head>
+<body>
+
+<div class="info">
+  <h3>📍 Live Location Kendaraan</h3>
+  <p>Latitude  : <span id="lat">-</span></p>
+  <p>Longitude : <span id="lon">-</span></p>
+  <p>Waktu     : <span id="time">-</span></p>
+</div>
+
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+  // 🔥 KONFIGURASI FIREBASE (GANTI PUNYA ANDA)
+  const firebaseConfig = {
+    apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo",
+    databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const database = getDatabase(app);
+
+  // Inisialisasi Map
+  const map = L.map('map').setView([0, 0], 15);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  let marker = L.marker([0, 0]).addTo(map);
+
+  // Ambil data dari Firebase
+  const liveRef = ref(database, 'monitoring_kendaraan/live_location');
+
+  onValue(liveRef, (snapshot) => {
+    const data = snapshot.val();
+
+    if (data) {
+      const lat = data.latitude;
+      const lon = data.longitude;
+      const time = data.timestamp;
+
+      document.getElementById("lat").innerText = lat;
+      document.getElementById("lon").innerText = lon;
+      document.getElementById("time").innerText = time;
+
+      marker.setLatLng([lat, lon]);
+      map.setView([lat, lon], 17);
+    }
+  });
+</script>
+
+</body>
+</html>
