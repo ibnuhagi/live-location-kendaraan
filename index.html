@@ -4,23 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Monitoring Kendaraan</title>
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-
   <style>
     body { margin: 0; font-family: 'Roboto', sans-serif; background-color: #e5e7eb; }
     #map { height: 70vh; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
-    
     .container { padding: 20px; max-width: 800px; margin: auto; }
-    .card { background: white; padding: 20px; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px; }
-    
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px; }
     h2 { margin-top: 0; color: #1f2937; display: flex; align-items: center; gap: 10px; }
     .status-box { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     .info-item { background: #f3f4f6; padding: 10px 15px; border-radius: 8px; flex: 1; min-width: 150px; }
     .info-item label { display: block; font-size: 12px; color: #6b7280; font-weight: bold; text-transform: uppercase; }
     .info-item span { font-size: 14px; color: #111827; font-weight: 500; }
-
     #engine-status { font-weight: bold; padding: 2px 8px; border-radius: 4px; }
     .status-on { background-color: #d1fae5; color: #065f46; }
     .status-off { background-color: #fee2e2; color: #991b1b; }
@@ -42,7 +37,7 @@
       </div>
       <div class="info-item">
         <label>Koordinat</label>
-        <span id="coords">-</span>
+        <span id="coords">Menunggu Sinyal...</span>
       </div>
     </div>
   </div>
@@ -64,55 +59,47 @@
   const app = initializeApp(firebaseConfig);
   const database = getDatabase(app);
 
-  // 1. Inisialisasi Map
+  // Default ke Jakarta jika GPS belum lock
   const map = L.map('map').setView([-6.2088, 106.8456], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap'
   }).addTo(map);
 
-  // 2. Custom Icon Motor
   const motorIcon = L.icon({
     iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448624.png', 
-    iconSize: [50, 50],    // Ukuran icon motor
-    iconAnchor: [25, 25],  // Titik tengah icon
-    popupAnchor: [0, -20]
+    iconSize: [50, 50],
+    iconAnchor: [25, 25]
   });
 
-  // Marker awal
-  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map).bindPopup("Lokasi Motor");
+  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map);
 
-  // 3. Ambil Data Lokasi
+  // 1. Monitor Lokasi
   const liveRef = ref(database, 'monitoring_kendaraan/live_location');
   onValue(liveRef, (snapshot) => {
     const data = snapshot.val();
     if (data) {
       const { latitude, longitude, timestamp } = data;
       
-      document.getElementById("coords").innerText = `${latitude}, ${longitude}`;
-      document.getElementById("time").innerText = timestamp;
-
-      marker.setLatLng([latitude, longitude]);
-      map.panTo([latitude, longitude]); // Animasi geser halus
+      // Proteksi: Hanya update jika koordinat bukan 0
+      if (latitude !== 0 && longitude !== 0) {
+          document.getElementById("coords").innerText = `${latitude}, ${longitude}`;
+          document.getElementById("time").innerText = timestamp;
+          marker.setLatLng([latitude, longitude]);
+          map.panTo([latitude, longitude]);
+      } else {
+          document.getElementById("coords").innerText = "Menunggu Sinyal GPS...";
+      }
     }
   });
 
-  // 4. Ambil Status Mesin
+  // 2. Monitor Mesin
   const engineRef = ref(database, 'monitoring_kendaraan/engine/status');
   onValue(engineRef, (snapshot) => {
     const status = snapshot.val();
     const el = document.getElementById("engine-status");
     el.innerText = status;
-    
-    if(status === "ON") {
-      el.className = "status-on";
-    } else {
-      el.className = "status-off";
-    }
+    el.className = (status === "ON") ? "status-on" : "status-off";
   });
 </script>
-
 </body>
 </html>
-
-
-
