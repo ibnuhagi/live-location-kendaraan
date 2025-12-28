@@ -1,93 +1,109 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Monitoring Kendaraan</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    body { margin: 0; font-family: 'Roboto', sans-serif; background-color: #e5e7eb; }
-    #map { height: 70vh; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
-    .container { padding: 20px; max-width: 800px; margin: auto; }
-    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px; }
-    h2 { margin-top: 0; color: #1f2937; display: flex; align-items: center; gap: 10px; }
-    .status-box { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-    .info-item { background: #f3f4f6; padding: 10px 15px; border-radius: 8px; flex: 1; min-width: 150px; }
-    .info-item label { display: block; font-size: 12px; color: #6b7280; font-weight: bold; text-transform: uppercase; }
-    .info-item span { font-size: 14px; color: #111827; font-weight: 500; }
-    #engine-status { font-weight: bold; padding: 2px 8px; border-radius: 4px; }
-    .status-on { background-color: #d1fae5; color: #065f46; }
-    .status-off { background-color: #fee2e2; color: #991b1b; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Monitoring Kendaraan - Fast Update</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; font-family: 'Roboto', sans-serif; background-color: #f3f4f6; }
+        #map { height: 70vh; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
+        .container { padding: 15px; max-width: 900px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        h2 { margin: 0 0 15px 0; color: #1f2937; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
+        .status-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+        .info-item { background: #f9fafb; padding: 12px; border-radius: 10px; border: 1px solid #edf2f7; }
+        .info-item label { display: block; font-size: 10px; color: #9ca3af; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+        .info-item span { font-size: 13px; color: #111827; font-weight: 600; }
+        #engine-status { font-weight: bold; padding: 3px 10px; border-radius: 20px; font-size: 11px; }
+        .status-on { background-color: #d1fae5; color: #065f46; }
+        .status-off { background-color: #fee2e2; color: #991b1b; }
+    </style>
 </head>
 <body>
+
 <div class="container">
-  <div class="card">
-    <h2>🏍️ Live Monitoring</h2>
-    <div class="status-box">
-      <div class="info-item">
-        <label>Status Mesin</label>
-        <span id="engine-status">Mengecek...</span>
-      </div>
-      <div class="info-item">
-        <label>Waktu Terakhir</label>
-        <span id="time">-</span>
-      </div>
-      <div class="info-item">
-        <label>Koordinat</label>
-        <span id="coords">Menunggu GPS Lock...</span>
-      </div>
+    <div class="card">
+        <h2>🏍️ Real-Time Monitoring (1s Update)</h2>
+        <div class="status-box">
+            <div class="info-item">
+                <label>Status Mesin</label>
+                <span id="engine-status">Checking...</span>
+            </div>
+            <div class="info-item">
+                <label>Waktu Update</label>
+                <span id="time">-</span>
+            </div>
+            <div class="info-item">
+                <label>Koordinat (GPS)</label>
+                <span id="coords">Mencari Sinyal...</span>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
+
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo",
-    databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
-  };
+    // Firebase Configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo",
+        databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
 
-  const app = initializeApp(firebaseConfig);
-  const database = getDatabase(app);
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
 
-  // Default view ke Indonesia jika data awal masih 0
-  const map = L.map('map').setView([-6.2088, 106.8456], 15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap'
-  }).addTo(map);
+    // Inisialisasi Peta (Default Jakarta)
+    const map = L.map('map').setView([-6.2088, 106.8456], 17);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-  const motorIcon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448624.png', 
-    iconSize: [50, 50],
-    iconAnchor: [25, 25]
-  });
+    // Icon Motor kustom
+    const motorIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448624.png', 
+        iconSize: [45, 45],
+        iconAnchor: [22, 22]
+    });
 
-  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map).bindPopup("Lokasi Kendaraan");
+    let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map);
 
-  const liveRef = ref(database, 'monitoring_kendaraan/live_location');
-  onValue(liveRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data && data.latitude !== 0) {
-      document.getElementById("coords").innerText = `${data.latitude}, ${data.longitude}`;
-      document.getElementById("time").innerText = data.timestamp;
-      marker.setLatLng([data.latitude, data.longitude]);
-      map.panTo([data.latitude, data.longitude]);
-    }
-  });
+    // Update Live Location tiap detik
+    const liveRef = ref(database, 'monitoring_kendaraan/live_location');
+    onValue(liveRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.latitude !== 0) {
+            const lat = data.latitude;
+            const lon = data.longitude;
+            
+            // Update teks info
+            document.getElementById("coords").innerText = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+            document.getElementById("time").innerText = data.timestamp;
 
-  const engineRef = ref(database, 'monitoring_kendaraan/engine/status');
-  onValue(engineRef, (snapshot) => {
-    const status = snapshot.val();
-    const el = document.getElementById("engine-status");
-    el.innerText = status;
-    el.className = (status === "ON") ? "status-on" : "status-off";
-  });
+            // Update posisi marker & gerakkan kamera halus (Smooth Pan)
+            const newPos = [lat, lon];
+            marker.setLatLng(newPos);
+            map.panTo(newPos, { animate: true, duration: 1.0 }); // Durasi 1 detik agar sinkron
+        }
+    });
+
+    // Update Status Mesin
+    const engineRef = ref(database, 'monitoring_kendaraan/engine/status');
+    onValue(engineRef, (snapshot) => {
+        const status = snapshot.val();
+        const el = document.getElementById("engine-status");
+        if (status) {
+            el.innerText = status;
+            el.className = (status === "ON") ? "status-on" : "status-off";
+        }
+    });
 </script>
+
 </body>
 </html>
