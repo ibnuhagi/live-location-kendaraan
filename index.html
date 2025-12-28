@@ -79,9 +79,7 @@
   });
 
   // Marker awal
-  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map).bindPopup("Lokasi Motor");;
-
-  let marker = L.marker([0, 0], {icon: motorIcon}).addTo(map).bindPopup("Posisi Kendaraan");
+  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map).bindPopup("Lokasi Motor");
 
   // 3. Ambil Data Lokasi
   const liveRef = ref(database, 'monitoring_kendaraan/live_location');
@@ -115,5 +113,6 @@
 
 </body>
 </html>
+
 
 
