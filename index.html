@@ -22,7 +22,6 @@
   </style>
 </head>
 <body>
-
 <div class="container">
   <div class="card">
     <h2>🏍️ Live Monitoring</h2>
@@ -37,16 +36,14 @@
       </div>
       <div class="info-item">
         <label>Koordinat</label>
-        <span id="coords">Menunggu Sinyal...</span>
+        <span id="coords">Menunggu GPS Lock...</span>
       </div>
     </div>
   </div>
 </div>
-
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
   import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
@@ -59,7 +56,7 @@
   const app = initializeApp(firebaseConfig);
   const database = getDatabase(app);
 
-  // Default ke Jakarta jika GPS belum lock
+  // Default view ke Indonesia jika data awal masih 0
   const map = L.map('map').setView([-6.2088, 106.8456], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap'
@@ -71,28 +68,19 @@
     iconAnchor: [25, 25]
   });
 
-  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map);
+  let marker = L.marker([-6.2088, 106.8456], {icon: motorIcon}).addTo(map).bindPopup("Lokasi Kendaraan");
 
-  // 1. Monitor Lokasi
   const liveRef = ref(database, 'monitoring_kendaraan/live_location');
   onValue(liveRef, (snapshot) => {
     const data = snapshot.val();
-    if (data) {
-      const { latitude, longitude, timestamp } = data;
-      
-      // Proteksi: Hanya update jika koordinat bukan 0
-      if (latitude !== 0 && longitude !== 0) {
-          document.getElementById("coords").innerText = `${latitude}, ${longitude}`;
-          document.getElementById("time").innerText = timestamp;
-          marker.setLatLng([latitude, longitude]);
-          map.panTo([latitude, longitude]);
-      } else {
-          document.getElementById("coords").innerText = "Menunggu Sinyal GPS...";
-      }
+    if (data && data.latitude !== 0) {
+      document.getElementById("coords").innerText = `${data.latitude}, ${data.longitude}`;
+      document.getElementById("time").innerText = data.timestamp;
+      marker.setLatLng([data.latitude, data.longitude]);
+      map.panTo([data.latitude, data.longitude]);
     }
   });
 
-  // 2. Monitor Mesin
   const engineRef = ref(database, 'monitoring_kendaraan/engine/status');
   onValue(engineRef, (snapshot) => {
     const status = snapshot.val();
