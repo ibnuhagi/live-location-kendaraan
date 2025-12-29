@@ -3,145 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Tracking & History - Monitoring Kendaraan</title>
+    <title>GPS Vehicle Monitoring</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f0f2f5; }
-        #map { height: 450px; width: 100%; border-bottom: 5px solid #007bff; z-index: 1; }
-        
+        :root { --p: #1a73e8; --d: #ea4335; --s: #34a853; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f8f9fa; }
+        .header { background: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #map { height: 400px; width: 100%; z-index: 1; }
         .container { padding: 20px; max-width: 1000px; margin: auto; }
-        .card { 
-            background: white; 
-            padding: 20px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-        }
-        
-        h3 { margin-top: 0; color: #1a73e8; display: flex; align-items: center; gap: 10px; }
-        
-        .table-responsive { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th { background: #007bff; color: white; padding: 12px; text-align: left; position: sticky; top: 0; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
-        tr:hover { background-color: #f8f9fa; }
-        
-        .btn-maps { 
-            background: #28a745; 
-            color: white; 
-            text-decoration: none; 
-            padding: 6px 12px; 
-            border-radius: 4px; 
-            font-size: 12px;
-            font-weight: bold;
-            transition: 0.3s;
-        }
-        .btn-maps:hover { background: #218838; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        
-        #loading-text { color: #666; font-style: italic; text-align: center; padding: 20px; }
-
-        /* Sembunyikan kolom longitude di layar kecil agar tidak berantakan */
-        @media (max-width: 600px) {
-            th:nth-child(3), td:nth-child(3) { display: none; }
-        }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .badge { padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; }
+        .status-on { background: #e6f4ea; color: var(--s); }
+        .status-off { background: #fce8e6; color: var(--d); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; color: #666; }
+        td { padding: 12px; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
+        .btn-maps { background: var(--p); color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; }
+        .v-icon { background: var(--p); border: 2px white solid; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; }
     </style>
 </head>
 <body>
+
+    <div class="header">
+        <h3 style="margin:0"><i class="fas fa-location-arrow"></i> GPS Tracker</h3>
+        <div id="engineStatus" class="badge status-on">Mesin: --</div>
+    </div>
 
     <div id="map"></div>
 
     <div class="container">
         <div class="card">
-            <h3>📂 Riwayat Perjalanan (20 Terakhir)</h3>
-            <div id="loading-text">Menghubungkan ke satelit...</div>
-            
-            <div class="table-responsive">
-                <table id="historyTable" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+                <h4 style="margin:0">📂 Riwayat Perjalanan</h4>
+                <div id="liveCoords" style="font-size:12px; color:#777">Lat: -- | Lon: --</div>
+            </div>
+            <div style="overflow-x:auto">
+                <table>
                     <thead>
                         <tr>
-                            <th>Waktu (WIB)</th>
-                            <th>Latitude</th>
-                            <th>Longitude</th>
+                            <th>Waktu</th>
+                            <th>Koordinat</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody">
-                        </tbody>
+                    <tbody id="tableBody"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
-        // 1. KONFIGURASI FIREBASE SESUAI ESP32 KAMU
         const firebaseConfig = {
             apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo",
             databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "monitoring-kendaraan-iot",
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 2. SETUP PETA LEAFLET
-        // Default awal ke Jakarta sebelum GPS lock
-        var map = L.map('map').setView([-6.2088, 106.8456], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-        
-        var marker = L.marker([-6.2088, 106.8456]).addTo(map)
-            .bindPopup("<b>Lokasi Kendaraan</b>").openPopup();
+        // Peta
+        var map = L.map('map').setView([-6.2, 106.8], 15);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // 3. UPDATE LIVE LOCATION (ICON MOTOR BERGERAK)
-        db.ref('monitoring_kendaraan/live_location').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if(data && data.latitude !== 0) {
-                const pos = [data.latitude, data.longitude];
-                marker.setLatLng(pos);
-                map.setView(pos, 16); // Zoom otomatis ke kendaraan
-                marker.getPopup().setContent("<b>Kendaraan Aktif</b><br>Update: " + data.timestamp).update();
+        // Icon Motor
+        var motorIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div class='v-icon'><i class='fas fa-motorcycle'></i></div>",
+            iconSize: [30, 30], iconAnchor: [15, 15]
+        });
+        var marker = L.marker([-6.2, 106.8], {icon: motorIcon}).addTo(map);
+
+        // Status Mesin Real-time
+        db.ref('monitoring_kendaraan/engine/status').on('value', (s) => {
+            const val = s.val() || "ON";
+            const el = document.getElementById('engineStatus');
+            el.innerText = "Mesin: " + val;
+            el.className = "badge " + (val == "ON" ? "status-on" : "status-off");
+        });
+
+        // Lokasi Real-time
+        db.ref('monitoring_kendaraan/live_location').on('value', (s) => {
+            const d = s.val();
+            if(d && d.latitude != 0) {
+                const p = [d.latitude, d.longitude];
+                marker.setLatLng(p);
+                map.panTo(p);
+                document.getElementById('liveCoords').innerText = `Lat: ${d.latitude.toFixed(6)} | Lon: ${d.longitude.toFixed(6)}`;
             }
         });
 
-        // 4. UPDATE TABEL HISTORI (DARI TELEGRAM & OTOMATIS)
-        // Ambil 20 data terakhir
-        const historyRef = db.ref('monitoring_kendaraan/history').limitToLast(20);
-
-        historyRef.on('child_added', (snapshot) => {
-            const data = snapshot.val();
-            const tableBody = document.getElementById('tableBody');
-            const loadingText = document.getElementById('loading-text');
-            const tableHead = document.getElementById('historyTable');
-
-            // Sembunyikan loading, tampilkan tabel
-            loadingText.style.display = 'none';
-            tableHead.style.display = 'table';
-
-            // Buat baris baru untuk tabel
-            const row = `
-                <tr>
-                    <td>${data.timestamp}</td>
-                    <td>${data.latitude.toFixed(6)}</td>
-                    <td>${data.longitude.toFixed(6)}</td>
-                    <td>
-                        <a href="https://www.google.com/maps?q=${data.latitude},${data.longitude}" 
-                           target="_blank" class="btn-maps">Buka Maps</a>
-                    </td>
-                </tr>
-            `;
-
-            // Tambahkan baris ke urutan paling atas (prepend)
-            tableBody.insertAdjacentHTML('afterbegin', row);
-
-            // Batasi tampilan hanya 20 baris di layar
-            if (tableBody.rows.length > 20) {
-                tableBody.deleteRow(tableBody.rows.length - 1);
+        // Histori Real-time (Auto-refresh saat hapus di Telegram)
+        db.ref('monitoring_kendaraan/history').limitToLast(15).on('value', (s) => {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = "";
+            if(!s.exists()) {
+                tbody.innerHTML = "<tr><td colspan='3' style='text-align:center'>Histori Kosong</td></tr>";
+                return;
             }
+            let rows = [];
+            s.forEach(child => {
+                const d = child.val();
+                rows.push(`<tr>
+                    <td><b>${d.timestamp}</b></td>
+                    <td>${d.latitude.toFixed(5)}, ${d.longitude.toFixed(5)}</td>
+                    <td><a href="https://www.google.com/maps?q=${d.latitude},${d.longitude}" target="_blank" class="btn-maps">Maps</a></td>
+                </tr>`);
+            });
+            tbody.innerHTML = rows.reverse().join('');
         });
     </script>
 </body>
