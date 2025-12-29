@@ -1,60 +1,125 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Tracker Fix</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Tracking & History - Monitoring Kendaraan</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
     <style>
-        body { font-family: sans-serif; margin: 0; background: #f8f9fa; }
-        .header { background: white; padding: 15px; display: flex; justify-content: space-between; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        #map { height: 40vh; width: 100%; border-bottom: 2px solid #007bff; }
-        .card { background: white; margin: 10px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
-        .badge-red { color: red; font-weight: bold; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f0f2f5; }
+        #map { height: 400px; width: 100%; border-bottom: 5px solid #007bff; z-index: 1; }
+        
+        .container { padding: 15px; max-width: 1000px; margin: auto; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        h3 { margin-top: 0; color: #1a73e8; display: flex; align-items: center; justify-content: space-between; }
+        .status-badge { font-size: 12px; padding: 5px 10px; border-radius: 20px; background: #eee; }
+        
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #007bff; color: white; padding: 10px; text-align: left; font-size: 13px; }
+        td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+        
+        .badge-danger { color: #d93025; font-weight: bold; background: #fce8e6; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .btn-maps { background: #28a745; color: white; text-decoration: none; padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        
+        #loading-text { color: #666; font-style: italic; text-align: center; padding: 20px; }
     </style>
 </head>
 <body>
-    <div class="header"><b>🛰️ GPS Tracker</b> <span id="statusEng">Mesin: --</span></div>
+
     <div id="map"></div>
-    <div class="card">
-        <h4>Riwayat Perjalanan <small id="coords" style="color:#888; float:right"></small></h4>
-        <table>
-            <thead><tr><th>Waktu</th><th>Lokasi</th><th>Aksi</th></tr></thead>
-            <tbody id="tableBody"></tbody>
-        </table>
+
+    <div class="container">
+        <div class="card">
+            <h3>📂 Riwayat Perjalanan <span id="engineBadge" class="status-badge">Mesin: --</span></h3>
+            <div id="loading-text">Menghubungkan ke Firebase...</div>
+            
+            <div class="table-responsive">
+                <table id="historyTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Waktu (WIB)</th>
+                            <th>Koordinat</th>
+                            <th>Keterangan</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
+
     <script>
-        const config = { apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo", databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app" };
-        firebase.initializeApp(config);
+        const firebaseConfig = {
+            apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo",
+            databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+        firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        var map = L.map('map').setView([0,0], 2);
+
+        var map = L.map('map').setView([-6.2088, 106.8456], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        var marker = L.marker([0,0]).addTo(map);
+        var marker = L.marker([-6.2088, 106.8456]).addTo(map).bindPopup("<b>Lokasi Kendaraan</b>");
 
-        db.ref('monitoring_kendaraan/live_location').on('value', (s) => {
-            const d = s.val(); if(!d) return;
-            const p = [d.latitude, d.longitude];
-            marker.setLatLng(p); map.panTo(p); if(map.getZoom()<10) map.setZoom(15);
-            document.getElementById('coords').innerText = d.latitude.toFixed(5) + "," + d.longitude.toFixed(5);
+        // 1. UPDATE LIVE LOCATION & ENGINE STATUS
+        db.ref('monitoring_kendaraan/live_location').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if(data && data.latitude !== 0) {
+                const pos = [data.latitude, data.longitude];
+                marker.setLatLng(pos);
+                map.panTo(pos);
+                if(map.getZoom() < 15) map.setZoom(16);
+            }
         });
 
-        db.ref('monitoring_kendaraan/engine/status').on('value', (s) => {
-            document.getElementById('statusEng').innerText = "Mesin: " + (s.val() || "ON");
+        db.ref('monitoring_kendaraan/engine/status').on('value', (snapshot) => {
+            const status = snapshot.val() || "--";
+            document.getElementById('engineBadge').innerText = "Mesin: " + status;
         });
 
-        db.ref('monitoring_kendaraan/history').limitToLast(10).on('value', (s) => {
-            const body = document.getElementById('tableBody'); body.innerHTML = "";
-            let rows = [];
-            s.forEach(child => {
-                const v = child.val();
-                const ket = v.keterangan === "Engine Kill" ? `<br><span class="badge-red">(${v.keterangan})</span>` : "";
-                rows.push(`<tr><td>${v.timestamp}${ket}</td><td>${v.latitude.toFixed(4)},${v.longitude.toFixed(4)}</td><td><a href="${v.maps_link}" target="_blank">Buka</a></td></tr>`);
+        // 2. UPDATE TABEL HISTORI (DERET KE BAWAH)
+        const historyRef = db.ref('monitoring_kendaraan/history').limitToLast(20);
+
+        historyRef.on('value', (snapshot) => {
+            const tableBody = document.getElementById('tableBody');
+            const loadingText = document.getElementById('loading-text');
+            const tableContainer = document.getElementById('historyTable');
+
+            loadingText.style.display = 'none';
+            tableContainer.style.display = 'table';
+            tableBody.innerHTML = ""; // Bersihkan untuk refresh data terbaru
+
+            let dataList = [];
+            snapshot.forEach((child) => {
+                dataList.push(child.val());
             });
-            body.innerHTML = rows.reverse().join('');
+
+            // Balik urutan agar yang terbaru paling atas
+            dataList.reverse().forEach((data) => {
+                // Logika Keterangan: Hanya tampilkan jika "Engine Kill"
+                const ketLabel = (data.keterangan === "Engine Kill") ? `<span class="badge-danger">Engine Kill</span>` : "-";
+                
+                const row = `
+                    <tr>
+                        <td><b>${data.timestamp}</b></td>
+                        <td>${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}</td>
+                        <td>${ketLabel}</td>
+                        <td>
+                            <a href="https://www.google.com/maps?q=${data.latitude},${data.longitude}" 
+                               target="_blank" class="btn-maps">Maps</a>
+                        </td>
+                    </tr>
+                `;
+                tableBody.insertAdjacentHTML('beforeend', row);
+            });
         });
     </script>
 </body>
