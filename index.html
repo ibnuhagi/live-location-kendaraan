@@ -3,58 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Vehicle Monitoring</title>
-    
+    <title>GPS Vehicle Tracker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
     <style>
-        :root { --p: #1a73e8; --d: #ea4335; --s: #34a853; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f8f9fa; }
-        .header { background: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        #map { height: 400px; width: 100%; z-index: 1; }
-        .container { padding: 20px; max-width: 1000px; margin: auto; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        .badge { padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; }
-        .status-on { background: #e6f4ea; color: var(--s); }
-        .status-off { background: #fce8e6; color: var(--d); }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; color: #666; }
-        td { padding: 12px; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
-        .btn-maps { background: var(--p); color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; }
-        .v-icon { background: var(--p); border: 2px white solid; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f4f7f6; }
+        .header { background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        #map { height: 45vh; width: 100%; border-bottom: 3px solid #1a73e8; }
+        .container { padding: 15px; }
+        .card { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .badge { padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
+        .status-on { background: #e6f4ea; color: #1e8e3e; }
+        .status-off { background: #fce8e6; color: #d93025; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { text-align: left; font-size: 12px; color: #777; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        td { padding: 12px 0; border-bottom: 1px solid #fafafa; font-size: 13px; }
+        .btn-maps { background: #1a73e8; color: #fff; text-decoration: none; padding: 5px 10px; border-radius: 4px; font-size: 11px; }
     </style>
 </head>
 <body>
-
     <div class="header">
-        <h3 style="margin:0"><i class="fas fa-location-arrow"></i> GPS Tracker</h3>
-        <div id="engineStatus" class="badge status-on">Mesin: --</div>
+        <h3 style="margin:0; color:#1a73e8;"><i class="fas fa-satellite-dish"></i> GPS Tracker</h3>
+        <div id="engineStatus" class="badge">Checking...</div>
     </div>
-
     <div id="map"></div>
-
     <div class="container">
         <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center">
-                <h4 style="margin:0">📂 Riwayat Perjalanan</h4>
-                <div id="liveCoords" style="font-size:12px; color:#777">Lat: -- | Lon: --</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h4 style="margin:0"><i class="fas fa-history"></i> Riwayat Perjalanan</h4>
+                <div id="liveCoords" style="font-size:11px; color:#999">Lat: -- | Lon: --</div>
             </div>
-            <div style="overflow-x:auto">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Waktu</th>
-                            <th>Koordinat</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody"></tbody>
-                </table>
-            </div>
+            <table>
+                <thead><tr><th>Waktu</th><th>Lokasi</th><th>Aksi</th></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
         </div>
     </div>
 
@@ -66,43 +51,35 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // Peta
-        var map = L.map('map').setView([-6.2, 106.8], 15);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        var map = L.map('map').setView([-6.2000, 106.8166], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        var marker = L.marker([-6.2000, 106.8166]).addTo(map);
 
-        // Icon Motor
-        var motorIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: "<div class='v-icon'><i class='fas fa-motorcycle'></i></div>",
-            iconSize: [30, 30], iconAnchor: [15, 15]
-        });
-        var marker = L.marker([-6.2, 106.8], {icon: motorIcon}).addTo(map);
-
-        // Status Mesin Real-time
+        // Sync Status Mesin
         db.ref('monitoring_kendaraan/engine/status').on('value', (s) => {
             const val = s.val() || "ON";
             const el = document.getElementById('engineStatus');
             el.innerText = "Mesin: " + val;
-            el.className = "badge " + (val == "ON" ? "status-on" : "status-off");
+            el.className = "badge " + (val === "ON" ? "status-on" : "status-off");
         });
 
-        // Lokasi Real-time
+        // Sync Live Location
         db.ref('monitoring_kendaraan/live_location').on('value', (s) => {
             const d = s.val();
-            if(d && d.latitude != 0) {
+            if(d && d.latitude !== 0) {
                 const p = [d.latitude, d.longitude];
                 marker.setLatLng(p);
                 map.panTo(p);
-                document.getElementById('liveCoords').innerText = `Lat: ${d.latitude.toFixed(6)} | Lon: ${d.longitude.toFixed(6)}`;
+                document.getElementById('liveCoords').innerText = d.latitude.toFixed(6) + " , " + d.longitude.toFixed(6);
             }
         });
 
-        // Histori Real-time (Auto-refresh saat hapus di Telegram)
-        db.ref('monitoring_kendaraan/history').limitToLast(15).on('value', (s) => {
+        // Sync History (Real-time update)
+        db.ref('monitoring_kendaraan/history').limitToLast(10).on('value', (s) => {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = "";
             if(!s.exists()) {
-                tbody.innerHTML = "<tr><td colspan='3' style='text-align:center'>Histori Kosong</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='3' style='text-align:center'>Data histori kosong</td></tr>";
                 return;
             }
             let rows = [];
@@ -110,8 +87,8 @@
                 const d = child.val();
                 rows.push(`<tr>
                     <td><b>${d.timestamp}</b></td>
-                    <td>${d.latitude.toFixed(5)}, ${d.longitude.toFixed(5)}</td>
-                    <td><a href="https://www.google.com/maps?q=${d.latitude},${d.longitude}" target="_blank" class="btn-maps">Maps</a></td>
+                    <td>${d.latitude.toFixed(4)}, ${d.longitude.toFixed(4)}</td>
+                    <td><a href="${d.maps_link}" target="_blank" class="btn-maps">Maps</a></td>
                 </tr>`);
             });
             tbody.innerHTML = rows.reverse().join('');
