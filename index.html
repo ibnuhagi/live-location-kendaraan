@@ -3,80 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Tracking System</title>
+    <title>Live Tracking & History - Monitoring Kendaraan</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <style>
-        :root { --primary: #2563eb; --danger: #dc2626; --success: #16a34a; }
-        body { font-family: 'Inter', sans-serif; margin: 0; background: #f8fafc; color: #1e293b; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f0f2f5; }
+        #map { height: 450px; width: 100%; border-bottom: 5px solid #007bff; z-index: 1; }
         
-        #map { height: 50vh; width: 100%; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-        
-        .status-bar { 
-            background: white; padding: 15px 25px; display: flex; 
-            justify-content: space-between; align-items: center;
-            border-bottom: 1px solid #e2e8f0;
+        .container { padding: 20px; max-width: 1000px; margin: auto; }
+        .card { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
         }
-
-        .badge {
-            padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-            text-transform: uppercase;
+        
+        h3 { margin-top: 0; color: #1a73e8; display: flex; align-items: center; gap: 10px; }
+        
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background: #007bff; color: white; padding: 12px; text-align: left; position: sticky; top: 0; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        tr:hover { background-color: #f8f9fa; }
+        
+        .btn-maps { 
+            background: #28a745; 
+            color: white; 
+            text-decoration: none; 
+            padding: 6px 12px; 
+            border-radius: 4px; 
+            font-size: 12px;
+            font-weight: bold;
+            transition: 0.3s;
         }
-        .bg-on { background: #dcfce7; color: var(--success); }
-        .bg-off { background: #fee2e2; color: var(--danger); }
+        .btn-maps:hover { background: #218838; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        
+        #loading-text { color: #666; font-style: italic; text-align: center; padding: 20px; }
 
-        .container { padding: 20px; max-width: 1100px; margin: auto; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); overflow: hidden; }
-        
-        .card-header { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; background: #fff; }
-        
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #f8fafc; padding: 12px 20px; text-align: left; font-size: 13px; color: #64748b; }
-        td { padding: 14px 20px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        
-        .text-kill { color: var(--danger); font-weight: bold; font-size: 11px; border: 1px solid var(--danger); padding: 2px 5px; border-radius: 4px; }
-        .btn-maps { color: var(--primary); text-decoration: none; font-weight: 600; }
+        /* Sembunyikan kolom longitude di layar kecil agar tidak berantakan */
+        @media (max-width: 600px) {
+            th:nth-child(3), td:nth-child(3) { display: none; }
+        }
     </style>
 </head>
 <body>
-
-    <div class="status-bar">
-        <div>
-            <h2 style="margin:0; font-size: 18px;"><i class="fa-solid fa-microchip"></i> Unit-01 Tracker</h2>
-            <small id="last-sync">Menghubungkan...</small>
-        </div>
-        <div id="engine-badge" class="badge">Checking...</div>
-    </div>
 
     <div id="map"></div>
 
     <div class="container">
         <div class="card">
-            <div class="card-header">
-                <h3 style="margin:0"><i class="fa-solid fa-clock-rotate-left"></i> Histori Perjalanan</h3>
-            </div>
-            <div style="overflow-x: auto;">
-                <table>
+            <h3>📂 Riwayat Perjalanan (20 Terakhir)</h3>
+            <div id="loading-text">Menghubungkan ke satelit...</div>
+            
+            <div class="table-responsive">
+                <table id="historyTable" style="display:none;">
                     <thead>
                         <tr>
-                            <th>Waktu</th>
-                            <th>Koordinat (Lat, Lon)</th>
-                            <th>Keterangan</th>
+                            <th>Waktu (WIB)</th>
+                            <th>Latitude</th>
+                            <th>Longitude</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody"></tbody>
+                    <tbody id="tableBody">
+                        </tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
+        // 1. KONFIGURASI FIREBASE SESUAI ESP32 KAMU
         const firebaseConfig = {
             apiKey: "AIzaSyD7r9PPgT88zbTqNfW1no-DY_c9CApSBGo",
             databaseURL: "https://monitoring-kendaraan-iot-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -85,60 +87,60 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // Setup Map dengan icon mobil kekinian
-        var map = L.map('map').setView([-6.2088, 106.8456], 15);
-        L.tileLayer('https://{s}.tile.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        // 2. SETUP PETA LEAFLET
+        // Default awal ke Jakarta sebelum GPS lock
+        var map = L.map('map').setView([-6.2088, 106.8456], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
         
-        var carIcon = L.divIcon({
-            html: '<i class="fa-solid fa-car-side" style="color:#2563eb; font-size:24px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);"></i>',
-            className: 'custom-div-icon',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
+        var marker = L.marker([-6.2088, 106.8456]).addTo(map)
+            .bindPopup("<b>Lokasi Kendaraan</b>").openPopup();
 
-        var marker = L.marker([-6.2088, 106.8456], {icon: carIcon}).addTo(map);
-
-        // Update Live Location & Engine Status
+        // 3. UPDATE LIVE LOCATION (ICON MOTOR BERGERAK)
         db.ref('monitoring_kendaraan/live_location').on('value', (snapshot) => {
             const data = snapshot.val();
-            if(data) {
+            if(data && data.latitude !== 0) {
                 const pos = [data.latitude, data.longitude];
                 marker.setLatLng(pos);
-                map.panTo(pos);
-                
-                // Update UI Status
-                document.getElementById('last-sync').innerText = "Update: " + data.timestamp;
-                const badge = document.getElementById('engine-badge');
-                badge.innerText = "Engine: " + data.status_mesin;
-                badge.className = "badge " + (data.status_mesin === "ON" ? "bg-on" : "bg-off");
+                map.setView(pos, 16); // Zoom otomatis ke kendaraan
+                marker.getPopup().setContent("<b>Kendaraan Aktif</b><br>Update: " + data.timestamp).update();
             }
         });
 
-        // Update Tabel Histori & Auto-Clear jika dihapus
-        const historyRef = db.ref('monitoring_kendaraan/history');
-        
-        historyRef.on('value', (snapshot) => {
+        // 4. UPDATE TABEL HISTORI (DARI TELEGRAM & OTOMATIS)
+        // Ambil 20 data terakhir
+        const historyRef = db.ref('monitoring_kendaraan/history').limitToLast(20);
+
+        historyRef.on('child_added', (snapshot) => {
+            const data = snapshot.val();
             const tableBody = document.getElementById('tableBody');
-            tableBody.innerHTML = ""; // Bersihkan tabel setiap ada perubahan (termasuk hapus)
-            
-            const dataObj = snapshot.val();
-            if (dataObj) {
-                // Ubah object ke array dan urutkan terbaru di atas
-                const keys = Object.keys(dataObj).reverse().slice(0, 20);
-                keys.forEach(key => {
-                    const item = dataObj[key];
-                    const infoTag = item.info === "ENGINE KILL" ? `<span class="text-kill">ENGINE KILL</span>` : "-";
-                    
-                    const row = `
-                        <tr>
-                            <td>${item.timestamp}</td>
-                            <td>${item.latitude.toFixed(5)}, ${item.longitude.toFixed(5)}</td>
-                            <td>${infoTag}</td>
-                            <td><a href="https://www.google.com/maps?q=${item.latitude},${item.longitude}" target="_blank" class="btn-maps"><i class="fa-solid fa-location-dot"></i> Maps</a></td>
-                        </tr>
-                    `;
-                    tableBody.innerHTML += row;
-                });
+            const loadingText = document.getElementById('loading-text');
+            const tableHead = document.getElementById('historyTable');
+
+            // Sembunyikan loading, tampilkan tabel
+            loadingText.style.display = 'none';
+            tableHead.style.display = 'table';
+
+            // Buat baris baru untuk tabel
+            const row = `
+                <tr>
+                    <td>${data.timestamp}</td>
+                    <td>${data.latitude.toFixed(6)}</td>
+                    <td>${data.longitude.toFixed(6)}</td>
+                    <td>
+                        <a href="https://www.google.com/maps?q=${data.latitude},${data.longitude}" 
+                           target="_blank" class="btn-maps">Buka Maps</a>
+                    </td>
+                </tr>
+            `;
+
+            // Tambahkan baris ke urutan paling atas (prepend)
+            tableBody.insertAdjacentHTML('afterbegin', row);
+
+            // Batasi tampilan hanya 20 baris di layar
+            if (tableBody.rows.length > 20) {
+                tableBody.deleteRow(tableBody.rows.length - 1);
             }
         });
     </script>
